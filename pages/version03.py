@@ -38,7 +38,7 @@ disagreement_themes = st.text_area(
     height=320
 )
 
-# ================= SYSTEM PROMPT (FINAL, STRICT) =================
+# ================= SYSTEM PROMPT (STRICT) =================
 SYSTEM_PROMPT = """
 You are a research assistant helping to optimize a classification prompt
 to maximize intercoder reliability.
@@ -67,7 +67,7 @@ that disambiguate edge cases and improve agreement among coders.
 You MUST output ONLY valid XML that strictly follows the requested structure.
 """
 
-# ================= OPENROUTER CALL =================
+# ================= OPENROUTER CALL (GPT / CLAUDE) =================
 def call_openrouter(model_name, system_prompt, user_prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -82,6 +82,35 @@ def call_openrouter(model_name, system_prompt, user_prompt):
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=120)
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+# ================= OPENROUTER CALL (GEMINI SPECIAL) =================
+def call_openrouter_gemini(model_name, system_prompt, user_prompt):
+    """
+    Gemini models on OpenRouter do not reliably support the `system` role.
+    We therefore merge system + user into a single user message.
+    """
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://streamlit.io",
+        "X-Title": "Prompt-Based Classification Optimizer"
+    }
+
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": system_prompt + "\n\n" + user_prompt
+            }
         ],
         "temperature": 0
     }
@@ -235,17 +264,17 @@ Return your answer as JSON only, using exactly this schema:
                 except Exception as e:
                     st.error(f"Claude error: {e}")
 
-            # ===== GEMINI 3 =====
+            # ===== GEMINI 3 FLASH (PREVIEW) =====
             with col3:
-                st.subheader("Gemini Revised Prompt")
+                st.subheader("Gemini 3 Flash (Preview) Revised Prompt")
                 try:
-                    gemini_prompt = call_openrouter(
-                        model_name="google/gemini-1.5-pro",  # ← change if your dashboard shows a different Gemini ID
+                    gemini_prompt = call_openrouter_gemini(
+                        model_name="google/gemini-3-flash-preview",
                         system_prompt=SYSTEM_PROMPT,
                         user_prompt=user_prompt
                     )
                     st.text_area(
-                        "Structured Classification Prompt (Gemini):",
+                        "Structured Classification Prompt (Gemini 3 Flash):",
                         gemini_prompt,
                         height=600
                     )
