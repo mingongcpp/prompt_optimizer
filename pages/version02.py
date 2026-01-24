@@ -190,10 +190,10 @@ You will be provided with:
 
 <Output_Format>
 Return your answer as JSON only, using exactly this schema:
-{
+{{
   "reasoning": "inclusion_criteria [] and exclusion_criteria []; explanation: [step-by-step reasoning with keywords]",
   "tactic_prediction": 0 or 1
-}
+}}
 </Output_Format>
 
 </classification_prompt>
