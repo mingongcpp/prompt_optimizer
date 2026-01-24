@@ -129,7 +129,7 @@ Please generate a revised classification prompt using the following XML structur
                 st.subheader("GPT-based Revised Prompt")
                 try:
                     gpt_prompt = call_openrouter(
-                        model_name="openai/gpt-4.1",
+                        model_name="openai/gpt-5.2",
                         system_prompt=SYSTEM_PROMPT,
                         user_prompt=user_prompt
                     )
