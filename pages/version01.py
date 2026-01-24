@@ -53,6 +53,7 @@ CRITICAL OUTPUT CONSTRAINTS:
 - Each example MUST be wrapped in its own <Example_n> tag.
 - Do NOT repeat example numbers.
 - Do NOT introduce any tags that are not specified.
+- The <Output_Format> section is REQUIRED and must be included exactly as specified.
 - Do NOT include explanations outside XML tags.
 
 DESIGN GOAL:
@@ -110,28 +111,44 @@ precision is required.
 
 <classification_prompt>
 <Role>...</Role>
+
 <Definition>...</Definition>
+
 <Input>...</Input>
+
 <Task>...</Task>
+
 <Classification>
 - tactic_prediction = 1 if the tactic is present
 - tactic_prediction = 0 if the tactic is not present
 </Classification>
+
 <Inclusion_Criteria>
 1. ...
 2. ...
 3. ...
 </Inclusion_Criteria>
+
 <Exclusion_Criteria>
 1. ...
 2. ...
 3. ...
 </Exclusion_Criteria>
+
 <Examples>
 <Example_1>...</Example_1>
 <Example_2>...</Example_2>
 <Example_3>...</Example_3>
 </Examples>
+
+<Output_Format>
+Return your answer as JSON only, using exactly this schema:
+{{
+  "reasoning": "inclusion_criteria [] and exclusion_criteria []; explanation: [step-by-step reasoning with keywords]",
+  "tactic_prediction": 0 or 1
+}}
+</Output_Format>
+
 </classification_prompt>
 """
 
@@ -149,7 +166,7 @@ precision is required.
                     st.text_area(
                         "Structured Classification Prompt (GPT-5.2):",
                         gpt_prompt,
-                        height=520
+                        height=560
                     )
                 except Exception as e:
                     st.error(f"GPT-5.2 error: {e}")
@@ -166,7 +183,7 @@ precision is required.
                     st.text_area(
                         "Structured Classification Prompt (Claude Opus 4.5):",
                         claude_prompt,
-                        height=520
+                        height=560
                     )
                 except Exception as e:
                     st.error(f"Claude error: {e}")
