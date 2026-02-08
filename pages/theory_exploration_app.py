@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import os
+import pandas as pd
 
 # ===============================
 # CONFIG
@@ -14,8 +15,8 @@ st.title("Theory-Guided Construct Exploration")
 st.write(
     """
     This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It coordinates multiple LLMs to explore existing marketing theory, map theory to chat transcripts,
-    and synthesize theory-grounded constructs and hypotheses.
+    It supports heterogeneous client data formats and coordinates multiple LLMs to explore
+    existing marketing theory, map theory to transcripts, and synthesize theory-grounded constructs.
     """
 )
 
@@ -28,25 +29,59 @@ if not OPENROUTER_API_KEY:
     st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
 
 # ===============================
-# INPUT: CHAT TRANSCRIPTS (UPLOAD)
+# INPUT: ANY FILE TYPE
 # ===============================
-st.header("1. Upload Sample Chat Transcripts")
+st.header("1. Upload Sample Data File")
 
 uploaded_file = st.file_uploader(
-    "Upload a text file containing sample chat transcripts (.txt or .md)",
-    type=["txt", "md"]
+    "Upload any file containing conversational text (CSV, TXT, MD, etc.)",
+    type=None
 )
 
 chat_data = None
 
 if uploaded_file is not None:
-    chat_data = uploaded_file.read().decode("utf-8")
-    st.success("Chat transcript file uploaded successfully.")
-    st.text_area(
-        "Preview of uploaded chat transcripts:",
-        chat_data,
-        height=200
-    )
+    file_name = uploaded_file.name.lower()
+
+    try:
+        # -------- CSV HANDLING --------
+        if file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+
+            st.write("Preview of uploaded CSV:")
+            st.dataframe(df.head())
+
+            text_column = st.selectbox(
+                "Select the column containing conversational text:",
+                df.columns
+            )
+
+            chat_data = "\n\n".join(
+                df[text_column]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+
+        # -------- OTHER FILE TYPES --------
+        else:
+            raw_bytes = uploaded_file.read()
+
+            try:
+                chat_data = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                chat_data = raw_bytes.decode("latin-1", errors="ignore")
+
+        if chat_data:
+            st.success("File loaded and converted to text successfully.")
+            st.text_area(
+                "Preview of extracted text (first 3,000 characters):",
+                chat_data[:3000],
+                height=200
+            )
+
+    except Exception as e:
+        st.error(f"Unable to process this file type: {e}")
 
 # ===============================
 # PROMPTS
@@ -58,7 +93,7 @@ in marketing and sales.
 Task:
 1. Identify relevant domain-specific marketing and sales theories
    used to explain conversational sales and customer decision-making.
-2. Conduct grounded analysis on the provided chat transcripts.
+2. Conduct grounded analysis on the provided conversational text.
 3. Identify recurring agent behaviors that influence customer commitment.
 4. Map these behaviors to theory-grounded constructs.
 
@@ -66,7 +101,7 @@ Requirements:
 - Focus on domain-specific theories (e.g., adaptive selling, procedural justice).
 - Do NOT treat surface linguistic features as constructs.
 - Identify 3–6 theory-grounded constructs.
-- Explain how each construct appears in the transcripts.
+- Explain how each construct appears in the text.
 
 Output Structure:
 1. Relevant Theories
@@ -137,7 +172,7 @@ with col1:
             st.session_state["output_1"] = output_1
             st.text_area("LLM 1 Output", output_1, height=400)
         else:
-            st.error("Please upload a chat transcript file first.")
+            st.error("Please upload a file containing conversational text.")
 
 with col2:
     st.subheader("LLM 2: Theory Exploration")
@@ -151,7 +186,7 @@ with col2:
             st.session_state["output_2"] = output_2
             st.text_area("LLM 2 Output", output_2, height=400)
         else:
-            st.error("Please upload a chat transcript file first.")
+            st.error("Please upload a file containing conversational text.")
 
 # ===============================
 # JUDGE / SYNTHESIS
@@ -185,6 +220,6 @@ OUTPUT 2:
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports theory exploration for method-focused analysis. "
-    "It identifies theory-grounded constructs prior to measurement."
+    "This app supports theory exploration using heterogeneous client data formats "
+    "and identifies theory-grounded constructs prior to measurement."
 )
