@@ -14,7 +14,7 @@ st.title("Theory-Guided Construct Exploration")
 st.write(
     """
     This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It uses multiple LLMs to explore existing marketing theory, map theory to chat transcripts,
+    It coordinates multiple LLMs to explore existing marketing theory, map theory to chat transcripts,
     and synthesize theory-grounded constructs and hypotheses.
     """
 )
@@ -28,14 +28,25 @@ if not OPENROUTER_API_KEY:
     st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
 
 # ===============================
-# INPUT: CHAT TRANSCRIPTS
+# INPUT: CHAT TRANSCRIPTS (UPLOAD)
 # ===============================
-st.header("1. Input Sample Chat Transcripts")
+st.header("1. Upload Sample Chat Transcripts")
 
-chat_data = st.text_area(
-    "Paste sample chat transcripts (10–15 complete conversations recommended):",
-    height=300
+uploaded_file = st.file_uploader(
+    "Upload a text file containing sample chat transcripts (.txt or .md)",
+    type=["txt", "md"]
 )
+
+chat_data = None
+
+if uploaded_file is not None:
+    chat_data = uploaded_file.read().decode("utf-8")
+    st.success("Chat transcript file uploaded successfully.")
+    st.text_area(
+        "Preview of uploaded chat transcripts:",
+        chat_data,
+        height=200
+    )
 
 # ===============================
 # PROMPTS
@@ -125,6 +136,8 @@ with col1:
             )
             st.session_state["output_1"] = output_1
             st.text_area("LLM 1 Output", output_1, height=400)
+        else:
+            st.error("Please upload a chat transcript file first.")
 
 with col2:
     st.subheader("LLM 2: Theory Exploration")
@@ -137,6 +150,8 @@ with col2:
             )
             st.session_state["output_2"] = output_2
             st.text_area("LLM 2 Output", output_2, height=400)
+        else:
+            st.error("Please upload a chat transcript file first.")
 
 # ===============================
 # JUDGE / SYNTHESIS
@@ -157,9 +172,13 @@ OUTPUT 2:
             prompt=JUDGE_PROMPT,
             content=combined_input
         )
-        st.text_area("Judge Output (Final Constructs & Hypotheses)",
-                     judge_output,
-                     height=500)
+        st.text_area(
+            "Judge Output (Final Constructs & Hypotheses)",
+            judge_output,
+            height=500
+        )
+    else:
+        st.error("Please run theory exploration with both LLMs first.")
 
 # ===============================
 # FOOTER
@@ -167,5 +186,5 @@ OUTPUT 2:
 st.markdown("---")
 st.caption(
     "This app supports theory exploration for method-focused analysis. "
-    "It is designed to identify theory-grounded constructs prior to measurement."
+    "It identifies theory-grounded constructs prior to measurement."
 )
