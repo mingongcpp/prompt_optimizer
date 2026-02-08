@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import os
-import pandas as pd
 
 # ===============================
 # CONFIG
@@ -15,8 +14,8 @@ st.title("Theory-Guided Construct Exploration")
 st.write(
     """
     This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It supports heterogeneous client data formats and coordinates multiple LLMs to explore
-    theory, map constructs, and generate hypotheses in a reproducible way.
+    Users can directly paste chat transcripts to explore theory-grounded constructs and hypotheses
+    using multiple LLMs in a reproducible workflow.
     """
 )
 
@@ -29,62 +28,23 @@ if not OPENROUTER_API_KEY:
     st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
 
 # ===============================
-# INPUT FILE
+# INPUT: MANUAL TRANSCRIPT ENTRY
 # ===============================
-st.header("1. Upload Sample Data File")
+st.header("1. Enter Sample Chat Transcripts")
 
-uploaded_file = st.file_uploader(
-    "Upload a file containing conversational text (CSV, TXT, MD, etc.)",
-    type=None
+chat_data = st.text_area(
+    "Paste sample chat transcripts here (10–15 conversations recommended):",
+    height=300,
+    placeholder="Example:\nCustomer: I'm not sure about the price.\nAgent: Let me check with my supervisor and see what we can do..."
 )
 
-chat_data = None
-
-if uploaded_file is not None:
-    filename = uploaded_file.name.lower()
-
-    try:
-        # ---- CSV ----
-        if filename.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-
-            st.write("CSV preview:")
-            st.dataframe(df.head())
-
-            text_column = st.selectbox(
-                "Select the column containing conversational text:",
-                df.columns
-            )
-
-            chat_data = "\n\n".join(
-                df[text_column]
-                .dropna()
-                .astype(str)
-                .tolist()
-            )
-
-        # ---- TXT / MD ----
-        elif filename.endswith(".txt") or filename.endswith(".md"):
-            chat_data = uploaded_file.read().decode("utf-8", errors="ignore")
-
-        # ---- OTHER TYPES ----
-        else:
-            st.warning(
-                "This file type cannot be previewed reliably. "
-                "The app will attempt to extract readable text."
-            )
-            chat_data = uploaded_file.read().decode("utf-8", errors="ignore")
-
-        if chat_data:
-            st.success("File processed successfully.")
-            st.text_area(
-                "Preview of extracted text (first 2000 characters):",
-                chat_data[:2000],
-                height=200
-            )
-
-    except Exception as e:
-        st.error(f"File processing failed: {e}")
+if chat_data:
+    st.success("Chat transcripts loaded successfully.")
+    st.text_area(
+        "Preview (first 2000 characters):",
+        chat_data[:2000],
+        height=200
+    )
 
 # ===============================
 # PROMPTS
@@ -156,7 +116,7 @@ def call_openrouter(model_name, system_prompt, content):
 
     response = requests.post(url, headers=headers, json=payload, timeout=120)
 
-    # ❗ Do NOT crash the app
+    # Do NOT crash the app
     if response.status_code != 200:
         return (
             f"[ERROR]\n"
@@ -189,7 +149,7 @@ with col1:
             st.session_state["output_1"] = output_1
             st.text_area("LLM 1 Output", output_1, height=400)
         else:
-            st.error("Please upload a data file first.")
+            st.error("Please paste chat transcripts first.")
 
 with col2:
     st.subheader("LLM 2")
@@ -201,7 +161,7 @@ with col2:
                 content=chat_data
             )
 
-            # ---- Fallback ----
+            # ---- Fallback if Gemini fails ----
             if output_2.startswith("[ERROR]"):
                 st.warning("LLM 2 failed. Falling back to GPT-4.1.")
                 output_2 = call_openrouter(
@@ -213,7 +173,7 @@ with col2:
             st.session_state["output_2"] = output_2
             st.text_area("LLM 2 Output", output_2, height=400)
         else:
-            st.error("Please upload a data file first.")
+            st.error("Please paste chat transcripts first.")
 
 # ===============================
 # JUDGE / SYNTHESIS
@@ -247,5 +207,6 @@ OUTPUT 2:
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports robust, reproducible theory exploration for method-focused analysis."
+    "This app supports reproducible theory exploration by allowing direct transcript input "
+    "and multi-model synthesis prior to measurement."
 )
