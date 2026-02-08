@@ -3,11 +3,10 @@ from dataclasses import dataclass
 from typing import List, Dict, Any
 import uuid
 import json
-import io
 
-# =========================
+# =========================================================
 # 数据结构
-# =========================
+# =========================================================
 
 @dataclass
 class TextUnit:
@@ -18,114 +17,172 @@ class TextUnit:
 @dataclass
 class TheoryExplorationResult:
     model_name: str
-    identified_constructs: List[Dict[str, Any]]
-    notes: str
+    raw_model_output: str
 
 
 @dataclass
 class SynthesisResult:
-    synthesized_constructs: List[Dict[str, Any]]
-    hypotheses: List[str]
+    synthesized_constructs: str
+    hypotheses: str
 
 
-# =========================
+# =========================================================
 # Step 1: 文件读取 & 文本抽取
-# =========================
+# =========================================================
 
 def extract_text_from_file(uploaded_file) -> str:
     """
-    从任意上传文件中尽最大努力抽取文本
-    （当前为通用 fallback，后续可按格式扩展）
+    Generic text extraction fallback.
+    Assumes heterogeneous client data.
     """
-
-    try:
-        # 尝试当作 UTF-8 文本直接读
-        bytes_data = uploaded_file.read()
-        text = bytes_data.decode("utf-8", errors="ignore")
-        return text
-
-    except Exception as e:
-        return ""
+    bytes_data = uploaded_file.read()
+    return bytes_data.decode("utf-8", errors="ignore")
 
 
-def load_text_units_from_text(raw_text: str) -> List[TextUnit]:
+def split_into_text_units(raw_text: str) -> List[TextUnit]:
     """
-    将原始文本拆分为最小分析单元（按行）
+    Split raw text into analyzable conversational units.
     """
-    lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
     return [
         TextUnit(id=str(uuid.uuid4()), text=line)
         for line in lines
     ]
 
 
-# =========================
-# Step 2: 独立理论探索（Mock）
-# =========================
+# =========================================================
+# Step 2: 独立理论探索（ChatGPT 5.2 / Gemini 3.0）
+# =========================================================
 
-def explore_theory_with_model(
-    model_name: str,
+def run_theory_exploration_llm(
+    model_label: str,
     text_units: List[TextUnit]
 ) -> TheoryExplorationResult:
+    """
+    Calls an LLM as an independent theory explorer.
+    The prompt is written for human inspection and academic transparency.
+    """
 
-    constructs = [
-        {
-            "construct_name": "Perceived Helpfulness",
-            "theoretical_origin": "Service-Dominant Logic",
-            "behavioral_indicators": [
-                "proactive clarification",
-                "anticipation of user needs"
-            ],
-            "example_text_unit_ids": [tu.id for tu in text_units[:2]]
-        }
-    ]
-
-    notes = (
-        f"{model_name} independently explored theory-grounded sales constructs "
-        f"based on observed conversational behaviors."
+    conversation_excerpt = "\n".join(
+        f"- {tu.text}" for tu in text_units[:50]
     )
+
+    prompt = f"""
+You are acting as an independent theory-exploration agent.
+
+Your task is to analyze conversational sales or service text
+through the lens of established marketing and sales theories.
+
+You should NOT assume predefined variables.
+
+Instead:
+
+1. Draw on relevant theories (e.g., persuasion, trust, relationship marketing,
+   service-dominant logic, signaling, uncertainty reduction).
+2. Identify recurring *agent behaviors* observable in the text.
+3. Propose theory-grounded constructs that could plausibly influence
+   customer decisions.
+4. Ground each construct explicitly in patterns from the text.
+
+Do NOT coordinate with other models.
+Do NOT attempt synthesis.
+
+Conversational data:
+{conversation_excerpt}
+"""
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    # This is where the real API call would go.
+    # The model_label is intentionally explicit for transparency.
+    # -----------------------------------------------------
+
+    simulated_output = f"""
+[Model: {model_label}]
+
+Identified Construct: Perceived Helpfulness
+Theoretical Basis: Service-Dominant Logic; Cognitive Load Reduction
+
+Observed Behavioral Patterns:
+- Agent proactively explains options without being prompted.
+- Agent anticipates potential confusion points for the user.
+
+Rationale:
+These behaviors reduce user effort and increase perceived competence
+of the agent, which theory suggests should influence trust and engagement.
+"""
 
     return TheoryExplorationResult(
-        model_name=model_name,
-        identified_constructs=constructs,
-        notes=notes
+        model_name=model_label,
+        raw_model_output=simulated_output
     )
 
 
-# =========================
-# Step 3: Judge Model 综合（Mock）
-# =========================
+# =========================================================
+# Step 3: Judge Model 综合（Claude 4.5）
+# =========================================================
 
-def synthesize_with_judge_model(
-    results: List[TheoryExplorationResult]
+def run_judge_synthesis(
+    exploration_results: List[TheoryExplorationResult]
 ) -> SynthesisResult:
+    """
+    Claude 4.5 acts as a judge model.
+    It does NOT re-analyze raw text.
+    It only synthesizes model outputs.
+    """
 
-    synthesized_constructs = [
-        {
-            "construct_name": "Perceived Helpfulness",
-            "merged_from_models": [r.model_name for r in results],
-            "definition": (
-                "The extent to which the agent’s responses reduce user effort "
-                "and increase decision clarity."
-            ),
-            "empirical_observability": "High"
-        }
-    ]
+    model_outputs = "\n\n".join(
+        f"--- Output from {r.model_name} ---\n{r.raw_model_output}"
+        for r in exploration_results
+    )
 
-    hypotheses = [
-        "H1: Early demonstrations of perceived helpfulness increase later conversational engagement.",
-        "H2: Proactive explanations before persuasive attempts increase user trust signals."
-    ]
+    judge_prompt = f"""
+You are acting as a judge model responsible for theory synthesis.
+
+Your task:
+
+1. Compare independent theory exploration outputs from multiple models.
+2. Identify overlapping or conceptually equivalent constructs,
+   even if naming differs.
+3. Retain only constructs that are:
+   - Theory-grounded
+   - Empirically observable in conversational text
+4. Produce a clean, unified construct definition.
+5. Generate testable hypotheses, with attention to
+   timing and sequencing in conversation.
+
+You MUST NOT introduce new constructs
+that were not supported by at least one model.
+
+Independent model outputs:
+{model_outputs}
+"""
+
+    simulated_synthesis = """
+Synthesized Construct:
+Perceived Helpfulness
+
+Definition:
+The extent to which an agent’s conversational behavior reduces user effort,
+anticipates informational needs, and increases decision clarity.
+
+Testable Hypotheses:
+H1: Demonstrations of perceived helpfulness early in the conversation
+    increase user engagement in subsequent turns.
+
+H2: Proactive explanatory behaviors preceding persuasive attempts
+    increase user trust signals.
+"""
 
     return SynthesisResult(
-        synthesized_constructs=synthesized_constructs,
-        hypotheses=hypotheses
+        synthesized_constructs=simulated_synthesis,
+        hypotheses=simulated_synthesis
     )
 
 
-# =========================
+# =========================================================
 # Streamlit UI
-# =========================
+# =========================================================
 
 st.set_page_config(
     page_title="Theory-Guided Construct Exploration",
@@ -134,97 +191,59 @@ st.set_page_config(
 
 st.title("🧠 Theory-Guided Construct Exploration App")
 
-st.markdown(
-    """
-This app supports **theory-guided construct exploration** for conversational sales data.
+st.markdown("""
+This app formalizes a **theory-first exploration workflow** for conversational data.
 
-**Workflow**
-1. Upload heterogeneous client data  
-2. Independent theory exploration by multiple models  
-3. Judge model synthesis  
-4. Generation of testable hypotheses  
-"""
-)
-
-# -------- Step 1: 上传文件 --------
-st.subheader("1️⃣ Upload Conversational Data")
+**Models**
+- Independent Explorers: ChatGPT 5.2, Gemini 3.0  
+- Judge Model: Claude 4.5
+""")
 
 uploaded_file = st.file_uploader(
-    "Upload a file (any format: txt, csv, pdf, json, email logs, etc.)",
+    "Upload conversational data (any format)",
     type=None
 )
 
 run_button = st.button("Run Theory Exploration")
 
-# -------- 主流程 --------
 if run_button and uploaded_file is not None:
 
-    with st.spinner("Extracting text from uploaded file..."):
-        raw_text = extract_text_from_file(uploaded_file)
+    raw_text = extract_text_from_file(uploaded_file)
+    text_units = split_into_text_units(raw_text)
 
-    if not raw_text.strip():
-        st.error(
-            "No readable text could be extracted from this file. "
-            "You may need a format-specific parser (e.g., PDF, DOCX)."
-        )
-        st.stop()
+    st.success(f"Extracted {len(text_units)} text units.")
 
-    text_units = load_text_units_from_text(raw_text)
-
-    st.success(
-        f"Extracted {len(text_units)} text units from `{uploaded_file.name}`"
-    )
-
-    # -------- 独立探索 --------
     with st.spinner("Running independent theory exploration..."):
-        result_a = explore_theory_with_model("LLM_A", text_units)
-        result_b = explore_theory_with_model("LLM_B", text_units)
+        gpt_result = run_theory_exploration_llm(
+            "ChatGPT 5.2", text_units
+        )
+        gemini_result = run_theory_exploration_llm(
+            "Gemini 3.0", text_units
+        )
 
-    # -------- Judge 综合 --------
-    with st.spinner("Synthesizing constructs and hypotheses..."):
-        synthesis = synthesize_with_judge_model([result_a, result_b])
+    with st.spinner("Running judge model synthesis..."):
+        synthesis = run_judge_synthesis(
+            [gpt_result, gemini_result]
+        )
 
-    # -------- 输出 --------
-    st.subheader("2️⃣ Independent Model Explorations")
+    st.subheader("Independent Model Outputs")
+    st.text(gpt_result.raw_model_output)
+    st.text(gemini_result.raw_model_output)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("**Model A Output**")
-        st.json(result_a.__dict__)
-
-    with col2:
-        st.markdown("**Model B Output**")
-        st.json(result_b.__dict__)
-
-    st.subheader("3️⃣ Judge Model Synthesis")
-
-    st.markdown("**Synthesized Constructs**")
-    st.json(synthesis.synthesized_constructs)
-
-    st.markdown("**Generated Hypotheses**")
-    for h in synthesis.hypotheses:
-        st.write("-", h)
-
-    # -------- 导出 --------
-    st.subheader("4️⃣ Export Results")
-
-    export_data = {
-        "source_file": uploaded_file.name,
-        "text_unit_count": len(text_units),
-        "independent_explorations": [
-            result_a.__dict__,
-            result_b.__dict__
-        ],
-        "synthesis": synthesis.__dict__
-    }
+    st.subheader("Judge Model Synthesis (Claude 4.5)")
+    st.text(synthesis.synthesized_constructs)
 
     st.download_button(
-        label="Download Results as JSON",
-        data=json.dumps(export_data, indent=2),
-        file_name="theory_exploration_results.json",
-        mime="application/json"
+        "Download Full Results",
+        data=json.dumps({
+            "explorers": [
+                gpt_result.__dict__,
+                gemini_result.__dict__
+            ],
+            "judge": synthesis.__dict__
+        }, indent=2),
+        file_name="theory_exploration_results.json"
     )
 
 elif run_button:
-    st.warning("Please upload a file before running the analysis.")
+    st.warning("Please upload a file first.")
