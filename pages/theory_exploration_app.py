@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Any
 import uuid
 import json
+import io
 
 # =========================
 # 数据结构
@@ -28,12 +29,28 @@ class SynthesisResult:
 
 
 # =========================
-# Step 1: 输入处理
+# Step 1: 文件读取 & 文本抽取
 # =========================
 
-def load_text_units(raw_text: str) -> List[TextUnit]:
+def extract_text_from_file(uploaded_file) -> str:
     """
-    将输入文本拆分为最小分析单元（按行）
+    从任意上传文件中尽最大努力抽取文本
+    （当前为通用 fallback，后续可按格式扩展）
+    """
+
+    try:
+        # 尝试当作 UTF-8 文本直接读
+        bytes_data = uploaded_file.read()
+        text = bytes_data.decode("utf-8", errors="ignore")
+        return text
+
+    except Exception as e:
+        return ""
+
+
+def load_text_units_from_text(raw_text: str) -> List[TextUnit]:
+    """
+    将原始文本拆分为最小分析单元（按行）
     """
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
     return [
@@ -43,17 +60,13 @@ def load_text_units(raw_text: str) -> List[TextUnit]:
 
 
 # =========================
-# Step 2: 独立理论探索（占位）
+# Step 2: 独立理论探索（Mock）
 # =========================
 
 def explore_theory_with_model(
     model_name: str,
     text_units: List[TextUnit]
 ) -> TheoryExplorationResult:
-    """
-    单模型 theory-guided construct exploration
-    （这里是 mock，后续可接 LLM API）
-    """
 
     constructs = [
         {
@@ -68,8 +81,8 @@ def explore_theory_with_model(
     ]
 
     notes = (
-        f"{model_name} independently explored marketing and sales theories "
-        f"and grounded constructs in conversational behaviors."
+        f"{model_name} independently explored theory-grounded sales constructs "
+        f"based on observed conversational behaviors."
     )
 
     return TheoryExplorationResult(
@@ -80,15 +93,12 @@ def explore_theory_with_model(
 
 
 # =========================
-# Step 3: Judge Model 综合（占位）
+# Step 3: Judge Model 综合（Mock）
 # =========================
 
 def synthesize_with_judge_model(
     results: List[TheoryExplorationResult]
 ) -> SynthesisResult:
-    """
-    Judge model：对齐构念、消解命名差异、生成假设
-    """
 
     synthesized_constructs = [
         {
@@ -123,44 +133,55 @@ st.set_page_config(
 )
 
 st.title("🧠 Theory-Guided Construct Exploration App")
+
 st.markdown(
     """
-This app operationalizes **theory-guided construct exploration** for conversational sales data.
+This app supports **theory-guided construct exploration** for conversational sales data.
 
 **Workflow**
-1. Upload or paste conversational text  
+1. Upload heterogeneous client data  
 2. Independent theory exploration by multiple models  
 3. Judge model synthesis  
 4. Generation of testable hypotheses  
 """
 )
 
-# -------- 输入区域 --------
-st.subheader("1️⃣ Input Conversational Text")
+# -------- Step 1: 上传文件 --------
+st.subheader("1️⃣ Upload Conversational Data")
 
-raw_text = st.text_area(
-    "Paste conversational text (one utterance per line):",
-    height=200
+uploaded_file = st.file_uploader(
+    "Upload a file (any format: txt, csv, pdf, json, email logs, etc.)",
+    type=None
 )
 
-# -------- 运行按钮 --------
 run_button = st.button("Run Theory Exploration")
 
 # -------- 主流程 --------
-if run_button and raw_text.strip():
+if run_button and uploaded_file is not None:
 
-    # Step 1
-    text_units = load_text_units(raw_text)
+    with st.spinner("Extracting text from uploaded file..."):
+        raw_text = extract_text_from_file(uploaded_file)
 
-    st.success(f"Loaded {len(text_units)} text units.")
+    if not raw_text.strip():
+        st.error(
+            "No readable text could be extracted from this file. "
+            "You may need a format-specific parser (e.g., PDF, DOCX)."
+        )
+        st.stop()
 
-    # Step 2
+    text_units = load_text_units_from_text(raw_text)
+
+    st.success(
+        f"Extracted {len(text_units)} text units from `{uploaded_file.name}`"
+    )
+
+    # -------- 独立探索 --------
     with st.spinner("Running independent theory exploration..."):
         result_a = explore_theory_with_model("LLM_A", text_units)
         result_b = explore_theory_with_model("LLM_B", text_units)
 
-    # Step 3
-    with st.spinner("Synthesizing constructs with judge model..."):
+    # -------- Judge 综合 --------
+    with st.spinner("Synthesizing constructs and hypotheses..."):
         synthesis = synthesize_with_judge_model([result_a, result_b])
 
     # -------- 输出 --------
@@ -185,11 +206,12 @@ if run_button and raw_text.strip():
     for h in synthesis.hypotheses:
         st.write("-", h)
 
-    # -------- 可复现导出 --------
+    # -------- 导出 --------
     st.subheader("4️⃣ Export Results")
 
     export_data = {
-        "text_units": [tu.__dict__ for tu in text_units],
+        "source_file": uploaded_file.name,
+        "text_unit_count": len(text_units),
         "independent_explorations": [
             result_a.__dict__,
             result_b.__dict__
@@ -205,4 +227,4 @@ if run_button and raw_text.strip():
     )
 
 elif run_button:
-    st.warning("Please paste some conversational text before running.")
+    st.warning("Please upload a file before running the analysis.")
