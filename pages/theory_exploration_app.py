@@ -1,225 +1,162 @@
-import streamlit as st
-import requests
-import os
-import pandas as pd
+from typing import List, Dict, Any
+from dataclasses import dataclass
+import json
+import uuid
 
-# ===============================
-# CONFIG
-# ===============================
-st.set_page_config(
-    page_title="Theory Exploration App",
-    layout="wide"
-)
 
-st.title("Theory-Guided Construct Exploration")
-st.write(
+# ========== 数据结构定义 ==========
+
+@dataclass
+class TextUnit:
+    """最小分析单元（一句、一轮对话等）"""
+    id: str
+    text: str
+
+
+@dataclass
+class TheoryExplorationResult:
+    """单个模型的理论探索结果"""
+    model_name: str
+    identified_constructs: List[Dict[str, Any]]
+    notes: str
+
+
+@dataclass
+class SynthesisResult:
+    """Judge model 的综合输出"""
+    synthesized_constructs: List[Dict[str, Any]]
+    hypotheses: List[str]
+
+
+# ========== Step 1: 输入数据处理 ==========
+
+def load_text_units(raw_texts: List[str]) -> List[TextUnit]:
     """
-    This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It supports heterogeneous client data formats and coordinates multiple LLMs to explore
-    existing marketing theory, map theory to transcripts, and synthesize theory-grounded constructs.
+    将异构输入转为统一的可分析文本单元
     """
-)
+    return [
+        TextUnit(id=str(uuid.uuid4()), text=text)
+        for text in raw_texts
+    ]
 
-# ===============================
-# API KEY (OpenRouter)
-# ===============================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-if not OPENROUTER_API_KEY:
-    st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
+# ========== Step 2: 独立理论探索 ==========
 
-# ===============================
-# INPUT: ANY FILE TYPE
-# ===============================
-st.header("1. Upload Sample Data File")
+def explore_theory_with_model(
+    model_name: str,
+    text_units: List[TextUnit]
+) -> TheoryExplorationResult:
+    """
+    使用单个 LLM 进行理论驱动的构念探索
+    （此处为占位逻辑，实际可接 OpenAI / Claude / 本地模型）
+    """
 
-uploaded_file = st.file_uploader(
-    "Upload any file containing conversational text (CSV, TXT, MD, etc.)",
-    type=None
-)
+    # --- 伪代码：实际应为 prompt + LLM 调用 ---
+    identified_constructs = [
+        {
+            "construct_name": "Perceived Helpfulness",
+            "theoretical_origin": "Service-Dominant Logic",
+            "behavioral_indicators": [
+                "agent proactively explains options",
+                "agent anticipates user concerns"
+            ],
+            "example_text_unit_ids": [tu.id for tu in text_units[:2]]
+        }
+    ]
 
-chat_data = None
+    notes = (
+        f"{model_name} focused on marketing and sales theories "
+        f"related to persuasion, trust, and conversational guidance."
+    )
 
-if uploaded_file is not None:
-    file_name = uploaded_file.name.lower()
+    return TheoryExplorationResult(
+        model_name=model_name,
+        identified_constructs=identified_constructs,
+        notes=notes
+    )
 
-    try:
-        # -------- CSV HANDLING --------
-        if file_name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
 
-            st.write("Preview of uploaded CSV:")
-            st.dataframe(df.head())
+# ========== Step 3: Judge Model 综合 ==========
 
-            text_column = st.selectbox(
-                "Select the column containing conversational text:",
-                df.columns
-            )
+def synthesize_with_judge_model(
+    exploration_results: List[TheoryExplorationResult]
+) -> SynthesisResult:
+    """
+    Judge model 对多个模型输出进行对齐、去重和理论筛选
+    """
 
-            chat_data = "\n\n".join(
-                df[text_column]
-                .dropna()
-                .astype(str)
-                .tolist()
-            )
+    # --- 伪代码：实际应为 judge prompt + LLM 调用 ---
+    synthesized_constructs = [
+        {
+            "construct_name": "Perceived Helpfulness",
+            "merged_from_models": [
+                r.model_name for r in exploration_results
+            ],
+            "definition": (
+                "The extent to which the agent’s responses reduce "
+                "user effort and increase decision clarity."
+            ),
+            "empirical_observability": "High"
+        }
+    ]
 
-        # -------- OTHER FILE TYPES --------
-        else:
-            raw_bytes = uploaded_file.read()
+    hypotheses = [
+        (
+            "H1: When perceived helpfulness is demonstrated early "
+            "in the conversation, user engagement increases in later turns."
+        ),
+        (
+            "H2: Sequencing proactive explanations before pricing information "
+            "leads to higher trust signals from users."
+        )
+    ]
 
-            try:
-                chat_data = raw_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                chat_data = raw_bytes.decode("latin-1", errors="ignore")
+    return SynthesisResult(
+        synthesized_constructs=synthesized_constructs,
+        hypotheses=hypotheses
+    )
 
-        if chat_data:
-            st.success("File loaded and converted to text successfully.")
-            st.text_area(
-                "Preview of extracted text (first 3,000 characters):",
-                chat_data[:3000],
-                height=200
-            )
 
-    except Exception as e:
-        st.error(f"Unable to process this file type: {e}")
+# ========== Step 4: 全流程 Orchestration ==========
 
-# ===============================
-# PROMPTS
-# ===============================
-THEORY_EXPLORATION_PROMPT = """
-You are a research assistant conducting theory-guided construct exploration
-in marketing and sales.
+def run_theory_exploration_pipeline(raw_texts: List[str]) -> Dict[str, Any]:
+    """
+    将整个 theory → synthesis → hypothesis 的流程串起来
+    """
 
-Task:
-1. Identify relevant domain-specific marketing and sales theories
-   used to explain conversational sales and customer decision-making.
-2. Conduct grounded analysis on the provided conversational text.
-3. Identify recurring agent behaviors that influence customer commitment.
-4. Map these behaviors to theory-grounded constructs.
+    # Step 1: 处理输入
+    text_units = load_text_units(raw_texts)
 
-Requirements:
-- Focus on domain-specific theories (e.g., adaptive selling, procedural justice).
-- Do NOT treat surface linguistic features as constructs.
-- Identify 3–6 theory-grounded constructs.
-- Explain how each construct appears in the text.
+    # Step 2: 多模型独立探索
+    model_a_result = explore_theory_with_model("LLM_A", text_units)
+    model_b_result = explore_theory_with_model("LLM_B", text_units)
 
-Output Structure:
-1. Relevant Theories
-2. Identified Constructs
-3. Theory–Data Mapping
-"""
+    # Step 3: Judge 综合
+    synthesis = synthesize_with_judge_model(
+        [model_a_result, model_b_result]
+    )
 
-JUDGE_PROMPT = """
-You are a senior academic reviewer.
-
-Task:
-Compare and synthesize two independent theory exploration outputs.
-
-Please:
-- Identify overlapping constructs
-- Resolve naming differences
-- Highlight theoretically robust and empirically observable constructs
-- Identify 2–3 constructs most suitable for downstream measurement
-- Generate 2–3 testable hypotheses based on these constructs
-
-Output Structure:
-1. Overlapping Constructs
-2. Final Selected Constructs
-3. Hypotheses
-"""
-
-# ===============================
-# OPENROUTER CALL
-# ===============================
-def call_openrouter(model_name, prompt, content):
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://streamlit.io",
-        "X-Title": "Theory Exploration App"
-    }
-
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": content}
+    # Step 4: 输出结构化结果（便于存档 & 复现）
+    output = {
+        "text_unit_count": len(text_units),
+        "independent_explorations": [
+            model_a_result.__dict__,
+            model_b_result.__dict__
         ],
-        "temperature": 0
+        "synthesis": synthesis.__dict__
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=120)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    return output
 
-# ===============================
-# RUN THEORY EXPLORATION
-# ===============================
-st.header("2. Run Theory Exploration")
 
-col1, col2 = st.columns(2)
+# ========== 示例运行 ==========
 
-with col1:
-    st.subheader("LLM 1: Theory Exploration")
-    if st.button("Run Theory Exploration (LLM 1)"):
-        if chat_data:
-            output_1 = call_openrouter(
-                model_name="openai/gpt-4.1",
-                prompt=THEORY_EXPLORATION_PROMPT,
-                content=chat_data
-            )
-            st.session_state["output_1"] = output_1
-            st.text_area("LLM 1 Output", output_1, height=400)
-        else:
-            st.error("Please upload a file containing conversational text.")
+if __name__ == "__main__":
+    sample_texts = [
+        "I can help you compare different plans based on your needs.",
+        "Most customers in your situation prefer this option."
+    ]
 
-with col2:
-    st.subheader("LLM 2: Theory Exploration")
-    if st.button("Run Theory Exploration (LLM 2)"):
-        if chat_data:
-            output_2 = call_openrouter(
-                model_name="google/gemini-1.5-pro",
-                prompt=THEORY_EXPLORATION_PROMPT,
-                content=chat_data
-            )
-            st.session_state["output_2"] = output_2
-            st.text_area("LLM 2 Output", output_2, height=400)
-        else:
-            st.error("Please upload a file containing conversational text.")
+    results = run_theory_exploration_pipeline(sample_texts)
 
-# ===============================
-# JUDGE / SYNTHESIS
-# ===============================
-st.header("3. Compare & Synthesize (Judge Model)")
-
-if st.button("Run Judge Model (Claude)"):
-    if "output_1" in st.session_state and "output_2" in st.session_state:
-        combined_input = f"""
-OUTPUT 1:
-{st.session_state["output_1"]}
-
-OUTPUT 2:
-{st.session_state["output_2"]}
-"""
-        judge_output = call_openrouter(
-            model_name="anthropic/claude-opus-4.5",
-            prompt=JUDGE_PROMPT,
-            content=combined_input
-        )
-        st.text_area(
-            "Judge Output (Final Constructs & Hypotheses)",
-            judge_output,
-            height=500
-        )
-    else:
-        st.error("Please run theory exploration with both LLMs first.")
-
-# ===============================
-# FOOTER
-# ===============================
-st.markdown("---")
-st.caption(
-    "This app supports theory exploration using heterogeneous client data formats "
-    "and identifies theory-grounded constructs prior to measurement."
-)
+    print(json.dumps(results, indent=2, ensure_ascii=False))
