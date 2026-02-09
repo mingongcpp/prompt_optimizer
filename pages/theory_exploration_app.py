@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import os
-import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 # ===============================
@@ -16,8 +15,8 @@ st.title("Theory-Guided Construct Exploration")
 st.write(
     """
     This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It uses multiple LLMs to independently explore theory, and a judge model to synthesize
-    theory-grounded constructs and hypotheses.
+    It uses multiple LLMs to independently explore theory and a judge model to synthesize
+    theory-grounded constructs and hypotheses in a reproducible pipeline.
     """
 )
 
@@ -113,7 +112,12 @@ def call_openrouter(model_name, system_prompt, content):
     response = requests.post(url, headers=headers, json=payload, timeout=120)
 
     if response.status_code != 200:
-        return f"[ERROR] {model_name}: {response.text}"
+        return (
+            f"[ERROR]\n"
+            f"Model: {model_name}\n"
+            f"Status code: {response.status_code}\n"
+            f"Response: {response.text}"
+        )
 
     try:
         return response.json()["choices"][0]["message"]["content"]
@@ -128,7 +132,7 @@ st.header("2. Run Theory Exploration")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("LLM 1 (Exploration)")
+    st.subheader("LLM 1 (GPT-4.1)")
     if st.button("Run LLM 1"):
         if chat_data:
             st.session_state["output_1"] = call_openrouter(
@@ -136,30 +140,44 @@ with col1:
                 THEORY_EXPLORATION_PROMPT,
                 chat_data
             )
+        else:
+            st.error("Please paste chat transcripts first.")
 
     if "output_1" in st.session_state:
-        st.text_area("LLM 1 Output", st.session_state["output_1"], height=350)
+        st.text_area(
+            "LLM 1 Output",
+            st.session_state["output_1"],
+            height=350
+        )
 
 with col2:
-    st.subheader("LLM 2 (Exploration)")
+    st.subheader("LLM 2 (Gemini 3 Flash)")
     if st.button("Run LLM 2"):
         if chat_data:
             result = call_openrouter(
-                "google/gemini-1.5-pro",
+                "google/gemini-3-flash-preview",
                 THEORY_EXPLORATION_PROMPT,
                 chat_data
             )
+
             if result.startswith("[ERROR]"):
-                st.warning("LLM 2 failed, falling back to GPT-4.1")
+                st.warning("LLM 2 failed. Falling back to GPT-4.1.")
                 result = call_openrouter(
                     "openai/gpt-4.1",
                     THEORY_EXPLORATION_PROMPT,
                     chat_data
                 )
+
             st.session_state["output_2"] = result
+        else:
+            st.error("Please paste chat transcripts first.")
 
     if "output_2" in st.session_state:
-        st.text_area("LLM 2 Output", st.session_state["output_2"], height=350)
+        st.text_area(
+            "LLM 2 Output",
+            st.session_state["output_2"],
+            height=350
+        )
 
 # ===============================
 # JUDGE MODEL (XML)
@@ -180,9 +198,15 @@ OUTPUT 2:
             JUDGE_PROMPT,
             combined_input
         )
+    else:
+        st.error("Please run both LLM explorations first.")
 
 if "judge_output" in st.session_state:
-    st.text_area("Judge Output (XML)", st.session_state["judge_output"], height=400)
+    st.text_area(
+        "Judge Output (XML)",
+        st.session_state["judge_output"],
+        height=400
+    )
 
 # ===============================
 # EXPORT RESULTS
@@ -222,5 +246,5 @@ if export_content:
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports reproducible, multi-model theory exploration with persistent outputs and structured synthesis."
+    "This app supports persistent multi-model theory exploration with structured XML synthesis."
 )
