@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import os
-from xml.dom import minidom
 
 # ===============================
 # CONFIG
@@ -34,7 +33,7 @@ if not OPENROUTER_API_KEY:
 st.header("1. Enter Sample Chat Transcripts")
 
 chat_data = st.text_area(
-    "Paste sample chat transcripts here:",
+    "Paste sample chat transcripts here (10–15 conversations recommended):",
     height=300,
     placeholder="Customer: I'm not sure about the price.\nAgent: Let me check with my supervisor..."
 )
@@ -66,23 +65,24 @@ Output clearly with section headers.
 JUDGE_PROMPT = """
 You are a senior academic reviewer.
 
-Compare and synthesize two theory exploration outputs.
+Your task is to compare and synthesize two independent theory exploration outputs.
 
-Output STRICT XML ONLY using the following structure:
+Please produce a clear, human-readable synthesis using the following format ONLY.
 
-<theory_synthesis>
-  <final_constructs>
-    <construct>
-      <name></name>
-      <behavior></behavior>
-      <theory></theory>
-      <outcome></outcome>
-    </construct>
-  </final_constructs>
-  <hypotheses>
-    <hypothesis></hypothesis>
-  </hypotheses>
-</theory_synthesis>
+## Final Theory-Grounded Constructs
+
+Present a table with the following columns:
+- Construct Name
+- Observable Behavior (example or description from transcripts)
+- Theory
+- Typical Outcome
+
+## Key Hypotheses
+
+List 2–3 concise, testable hypotheses (H1, H2, H3 if applicable) that explain how the constructs influence conversational outcomes.
+
+Do NOT output XML or JSON.
+Do NOT include explanations outside the sections above.
 """
 
 # ===============================
@@ -131,12 +131,13 @@ st.header("2. Run Theory Exploration")
 
 col1, col2 = st.columns(2)
 
+# -------- LLM 1 --------
 with col1:
-    st.subheader("LLM 1 (GPT-4.1)")
+    st.subheader("LLM 1 (GPT-5.2-chat)")
     if st.button("Run LLM 1"):
         if chat_data:
             st.session_state["output_1"] = call_openrouter(
-                "openai/gpt-4.1",
+                "openai/gpt-5.2-chat",
                 THEORY_EXPLORATION_PROMPT,
                 chat_data
             )
@@ -150,6 +151,7 @@ with col1:
             height=350
         )
 
+# -------- LLM 2 --------
 with col2:
     st.subheader("LLM 2 (Gemini 3 Flash)")
     if st.button("Run LLM 2"):
@@ -161,9 +163,9 @@ with col2:
             )
 
             if result.startswith("[ERROR]"):
-                st.warning("LLM 2 failed. Falling back to GPT-4.1.")
+                st.warning("LLM 2 failed. Falling back to GPT-5.2-chat.")
                 result = call_openrouter(
-                    "openai/gpt-4.1",
+                    "openai/gpt-5.2-chat",
                     THEORY_EXPLORATION_PROMPT,
                     chat_data
                 )
@@ -180,9 +182,9 @@ with col2:
         )
 
 # ===============================
-# JUDGE MODEL (XML)
+# JUDGE MODEL (READABLE FORMAT)
 # ===============================
-st.header("3. Judge Model Synthesis (XML Output)")
+st.header("3. Judge Model Synthesis")
 
 if st.button("Run Judge Model"):
     if "output_1" in st.session_state and "output_2" in st.session_state:
@@ -202,23 +204,12 @@ OUTPUT 2:
         st.error("Please run both LLM explorations first.")
 
 if "judge_output" in st.session_state:
-    st.text_area(
-        "Judge Output (XML)",
-        st.session_state["judge_output"],
-        height=400
-    )
+    st.markdown(st.session_state["judge_output"])
 
 # ===============================
 # EXPORT RESULTS
 # ===============================
 st.header("4. Export Results")
-
-def pretty_xml(xml_str):
-    try:
-        reparsed = minidom.parseString(xml_str)
-        return reparsed.toprettyxml(indent="  ")
-    except Exception:
-        return xml_str
 
 export_content = ""
 
@@ -229,9 +220,7 @@ if "output_2" in st.session_state:
     export_content += "\n\n=== LLM 2 OUTPUT ===\n\n" + st.session_state["output_2"]
 
 if "judge_output" in st.session_state:
-    export_content += "\n\n=== JUDGE OUTPUT (XML) ===\n\n" + pretty_xml(
-        st.session_state["judge_output"]
-    )
+    export_content += "\n\n=== JUDGE OUTPUT ===\n\n" + st.session_state["judge_output"]
 
 if export_content:
     st.download_button(
@@ -246,5 +235,5 @@ if export_content:
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports persistent multi-model theory exploration with structured XML synthesis."
+    "This app supports persistent multi-model theory exploration with human-readable synthesis."
 )
