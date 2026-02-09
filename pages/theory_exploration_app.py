@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import os
+import pandas as pd
 
 # ===============================
 # CONFIG
@@ -182,7 +183,7 @@ with col2:
         )
 
 # ===============================
-# JUDGE MODEL (READABLE FORMAT)
+# JUDGE MODEL
 # ===============================
 st.header("3. Judge Model Synthesis")
 
@@ -203,13 +204,48 @@ OUTPUT 2:
     else:
         st.error("Please run both LLM explorations first.")
 
+# -------- Display Judge Output --------
 if "judge_output" in st.session_state:
     st.markdown(st.session_state["judge_output"])
 
 # ===============================
-# EXPORT RESULTS
+# PARSE JUDGE TABLE → CSV
 # ===============================
-st.header("4. Export Results")
+st.header("4. Export Judge Results as CSV")
+
+if "judge_output" in st.session_state:
+    lines = st.session_state["judge_output"].splitlines()
+
+    table_lines = [
+        line for line in lines
+        if "|" in line and not line.strip().startswith("|---")
+    ]
+
+    if len(table_lines) >= 2:
+        headers = [h.strip() for h in table_lines[0].split("|")[1:-1]]
+        rows = [
+            [cell.strip() for cell in row.split("|")[1:-1]]
+            for row in table_lines[1:]
+        ]
+
+        df = pd.DataFrame(rows, columns=headers)
+
+        st.subheader("Parsed Constructs Table")
+        st.dataframe(df)
+
+        st.download_button(
+            label="Download Constructs as CSV",
+            data=df.to_csv(index=False),
+            file_name="theory_exploration_constructs.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No table detected in judge output.")
+
+# ===============================
+# EXPORT ALL RESULTS (ARCHIVE)
+# ===============================
+st.header("5. Download Full Results (Archive)")
 
 export_content = ""
 
@@ -224,7 +260,7 @@ if "judge_output" in st.session_state:
 
 if export_content:
     st.download_button(
-        label="Download All Results",
+        label="Download Full Results (TXT)",
         data=export_content,
         file_name="theory_exploration_results.txt",
         mime="text/plain"
@@ -235,5 +271,5 @@ if export_content:
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports persistent multi-model theory exploration with human-readable synthesis."
+    "This app supports persistent multi-model theory exploration with CSV-exportable synthesis."
 )
