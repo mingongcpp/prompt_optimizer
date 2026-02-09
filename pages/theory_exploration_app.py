@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 import os
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 # ===============================
 # CONFIG
@@ -14,8 +16,8 @@ st.title("Theory-Guided Construct Exploration")
 st.write(
     """
     This app operationalizes a **theory exploration workflow** for conversational sales data.
-    Users can directly paste chat transcripts to explore theory-grounded constructs and hypotheses
-    using multiple LLMs in a reproducible workflow.
+    It uses multiple LLMs to independently explore theory, and a judge model to synthesize
+    theory-grounded constructs and hypotheses.
     """
 )
 
@@ -28,23 +30,15 @@ if not OPENROUTER_API_KEY:
     st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
 
 # ===============================
-# INPUT: MANUAL TRANSCRIPT ENTRY
+# INPUT TRANSCRIPTS
 # ===============================
 st.header("1. Enter Sample Chat Transcripts")
 
 chat_data = st.text_area(
-    "Paste sample chat transcripts here (10–15 conversations recommended):",
+    "Paste sample chat transcripts here:",
     height=300,
-    placeholder="Example:\nCustomer: I'm not sure about the price.\nAgent: Let me check with my supervisor and see what we can do..."
+    placeholder="Customer: I'm not sure about the price.\nAgent: Let me check with my supervisor..."
 )
-
-if chat_data:
-    st.success("Chat transcripts loaded successfully.")
-    st.text_area(
-        "Preview (first 2000 characters):",
-        chat_data[:2000],
-        height=200
-    )
 
 # ===============================
 # PROMPTS
@@ -55,7 +49,7 @@ in marketing and sales.
 
 Below are sample chat transcripts from a conversational sales context.
 
-Your tasks:
+Tasks:
 1. Identify relevant domain-specific marketing and sales theories.
 2. Conduct grounded analysis on the transcripts.
 3. Identify recurring agent behaviors.
@@ -67,10 +61,7 @@ Requirements:
 - Identify 3–6 constructs.
 - Explain how each construct appears in the transcripts.
 
-Output Structure:
-1. Relevant Theories
-2. Identified Constructs
-3. Theory–Data Mapping
+Output clearly with section headers.
 """
 
 JUDGE_PROMPT = """
@@ -78,16 +69,21 @@ You are a senior academic reviewer.
 
 Compare and synthesize two theory exploration outputs.
 
-Tasks:
-- Identify overlapping constructs
-- Resolve naming differences
-- Select constructs suitable for downstream measurement
-- Generate 2–3 testable hypotheses
+Output STRICT XML ONLY using the following structure:
 
-Output Structure:
-1. Overlapping Constructs
-2. Final Selected Constructs
-3. Hypotheses
+<theory_synthesis>
+  <final_constructs>
+    <construct>
+      <name></name>
+      <behavior></behavior>
+      <theory></theory>
+      <outcome></outcome>
+    </construct>
+  </final_constructs>
+  <hypotheses>
+    <hypothesis></hypothesis>
+  </hypotheses>
+</theory_synthesis>
 """
 
 # ===============================
@@ -116,14 +112,8 @@ def call_openrouter(model_name, system_prompt, content):
 
     response = requests.post(url, headers=headers, json=payload, timeout=120)
 
-    # Do NOT crash the app
     if response.status_code != 200:
-        return (
-            f"[ERROR]\n"
-            f"Model: {model_name}\n"
-            f"Status code: {response.status_code}\n"
-            f"Response: {response.text}"
-        )
+        return f"[ERROR] {model_name}: {response.text}"
 
     try:
         return response.json()["choices"][0]["message"]["content"]
@@ -131,54 +121,50 @@ def call_openrouter(model_name, system_prompt, content):
         return f"[ERROR] Failed to parse response: {e}"
 
 # ===============================
-# RUN THEORY EXPLORATION
+# LLM EXPLORATION
 # ===============================
 st.header("2. Run Theory Exploration")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("LLM 1")
-    if st.button("Run Theory Exploration (LLM 1)"):
+    st.subheader("LLM 1 (Exploration)")
+    if st.button("Run LLM 1"):
         if chat_data:
-            output_1 = call_openrouter(
-                model_name="openai/gpt-4.1",
-                system_prompt=THEORY_EXPLORATION_PROMPT,
-                content=chat_data
+            st.session_state["output_1"] = call_openrouter(
+                "openai/gpt-4.1",
+                THEORY_EXPLORATION_PROMPT,
+                chat_data
             )
-            st.session_state["output_1"] = output_1
-            st.text_area("LLM 1 Output", output_1, height=400)
-        else:
-            st.error("Please paste chat transcripts first.")
+
+    if "output_1" in st.session_state:
+        st.text_area("LLM 1 Output", st.session_state["output_1"], height=350)
 
 with col2:
-    st.subheader("LLM 2")
-    if st.button("Run Theory Exploration (LLM 2)"):
+    st.subheader("LLM 2 (Exploration)")
+    if st.button("Run LLM 2"):
         if chat_data:
-            output_2 = call_openrouter(
-                model_name="google/gemini-1.5-pro",
-                system_prompt=THEORY_EXPLORATION_PROMPT,
-                content=chat_data
+            result = call_openrouter(
+                "google/gemini-1.5-pro",
+                THEORY_EXPLORATION_PROMPT,
+                chat_data
             )
-
-            # ---- Fallback if Gemini fails ----
-            if output_2.startswith("[ERROR]"):
-                st.warning("LLM 2 failed. Falling back to GPT-4.1.")
-                output_2 = call_openrouter(
-                    model_name="openai/gpt-4.1",
-                    system_prompt=THEORY_EXPLORATION_PROMPT,
-                    content=chat_data
+            if result.startswith("[ERROR]"):
+                st.warning("LLM 2 failed, falling back to GPT-4.1")
+                result = call_openrouter(
+                    "openai/gpt-4.1",
+                    THEORY_EXPLORATION_PROMPT,
+                    chat_data
                 )
+            st.session_state["output_2"] = result
 
-            st.session_state["output_2"] = output_2
-            st.text_area("LLM 2 Output", output_2, height=400)
-        else:
-            st.error("Please paste chat transcripts first.")
+    if "output_2" in st.session_state:
+        st.text_area("LLM 2 Output", st.session_state["output_2"], height=350)
 
 # ===============================
-# JUDGE / SYNTHESIS
+# JUDGE MODEL (XML)
 # ===============================
-st.header("3. Compare & Synthesize (Judge Model)")
+st.header("3. Judge Model Synthesis (XML Output)")
 
 if st.button("Run Judge Model"):
     if "output_1" in st.session_state and "output_2" in st.session_state:
@@ -189,24 +175,52 @@ OUTPUT 1:
 OUTPUT 2:
 {st.session_state["output_2"]}
 """
-        judge_output = call_openrouter(
-            model_name="anthropic/claude-opus-4.5",
-            system_prompt=JUDGE_PROMPT,
-            content=combined_input
+        st.session_state["judge_output"] = call_openrouter(
+            "anthropic/claude-opus-4.5",
+            JUDGE_PROMPT,
+            combined_input
         )
-        st.text_area(
-            "Final Constructs & Hypotheses",
-            judge_output,
-            height=500
-        )
-    else:
-        st.error("Please run theory exploration with both LLMs first.")
+
+if "judge_output" in st.session_state:
+    st.text_area("Judge Output (XML)", st.session_state["judge_output"], height=400)
+
+# ===============================
+# EXPORT RESULTS
+# ===============================
+st.header("4. Export Results")
+
+def pretty_xml(xml_str):
+    try:
+        reparsed = minidom.parseString(xml_str)
+        return reparsed.toprettyxml(indent="  ")
+    except Exception:
+        return xml_str
+
+export_content = ""
+
+if "output_1" in st.session_state:
+    export_content += "\n\n=== LLM 1 OUTPUT ===\n\n" + st.session_state["output_1"]
+
+if "output_2" in st.session_state:
+    export_content += "\n\n=== LLM 2 OUTPUT ===\n\n" + st.session_state["output_2"]
+
+if "judge_output" in st.session_state:
+    export_content += "\n\n=== JUDGE OUTPUT (XML) ===\n\n" + pretty_xml(
+        st.session_state["judge_output"]
+    )
+
+if export_content:
+    st.download_button(
+        label="Download All Results",
+        data=export_content,
+        file_name="theory_exploration_results.txt",
+        mime="text/plain"
+    )
 
 # ===============================
 # FOOTER
 # ===============================
 st.markdown("---")
 st.caption(
-    "This app supports reproducible theory exploration by allowing direct transcript input "
-    "and multi-model synthesis prior to measurement."
+    "This app supports reproducible, multi-model theory exploration with persistent outputs and structured synthesis."
 )
