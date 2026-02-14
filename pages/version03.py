@@ -154,9 +154,10 @@ precision and readability are required.
 
 <Input>
 You will be provided with:
-- <context>: The surrounding conversation including the customer’s concern(s), ending with the salesperson’s statement to classify.
-- <statement>: The salesperson’s specific response to classify. ONLY this statement should be evaluated.
+- <context>: The surrounding text or optional contextual information related to the statement.
+- <statement>: The specific text segment to classify. ONLY this statement should be evaluated.
 </Input>
+
 
 <Task>
 [State the binary decision clearly. Emphasize that only explicit actions in the specific <statement> count.]
