@@ -17,8 +17,7 @@ st.write(
     This app operationalizes a **theory-guided construct exploration workflow**
     for textual data in marketing, persuasion, and strategic communication contexts.
 
-    It uses multiple LLMs to independently explore theory-grounded constructs
-    and a judge model to synthesize reproducible outputs.
+    Upload a CSV file containing textual data (must include columns: `id`, `caption`).
     """
 )
 
@@ -28,18 +27,39 @@ st.write(
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 if not OPENROUTER_API_KEY:
-    st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
+    st.warning("Please set OPENROUTER_API_KEY in environment variables.")
 
 # ===============================
-# INPUT TEXT DATA
+# STEP 1: UPLOAD CSV
 # ===============================
-st.header("1. Enter Sample Text Data")
+st.header("1. Upload Text Dataset (CSV)")
 
-text_data = st.text_area(
-    "Paste sample textual data here (e.g., social media captions, marketing copy, brand communication, conversational text). 10–20 samples recommended:",
-    height=300,
-    placeholder="Example:\n\nDiscover why professional riders choose the KTM350SXF...\nLink in bio..."
+uploaded_file = st.file_uploader(
+    "Upload CSV file (must contain columns: id, caption)",
+    type=["csv"]
 )
+
+text_data = None
+df = None
+
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+
+        if "id" not in df.columns or "caption" not in df.columns:
+            st.error("CSV must contain 'id' and 'caption' columns.")
+        else:
+            st.success("File uploaded successfully.")
+            st.subheader("Preview Data")
+            st.dataframe(df.head())
+
+            # Combine captions into one text block for exploration
+            text_data = "\n\n".join(
+                [f"ID {row['id']}: {row['caption']}" for _, row in df.iterrows()]
+            )
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
 
 # ===============================
 # PROMPTS
@@ -59,7 +79,7 @@ Tasks:
 Requirements:
 - Focus on theoretically established constructs.
 - Do NOT invent new theories.
-- Do NOT treat surface linguistic features (e.g., emojis, punctuation alone) as constructs.
+- Do NOT treat surface linguistic features as constructs.
 - Identify 3–6 constructs that are both theory-grounded and observable in the data.
 - Clearly explain how each construct manifests in the text.
 
@@ -106,10 +126,7 @@ def call_openrouter(model_name, system_prompt, content):
         "model": model_name,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Here is the textual dataset:\n\n{content}"
-            }
+            {"role": "user", "content": f"Here is the textual dataset:\n\n{content}"}
         ],
         "temperature": 0
     }
@@ -117,12 +134,7 @@ def call_openrouter(model_name, system_prompt, content):
     response = requests.post(url, headers=headers, json=payload, timeout=120)
 
     if response.status_code != 200:
-        return (
-            f"[ERROR]\n"
-            f"Model: {model_name}\n"
-            f"Status code: {response.status_code}\n"
-            f"Response: {response.text}"
-        )
+        return f"[ERROR] {response.text}"
 
     try:
         return response.json()["choices"][0]["message"]["content"]
@@ -130,7 +142,7 @@ def call_openrouter(model_name, system_prompt, content):
         return f"[ERROR] Failed to parse response: {e}"
 
 # ===============================
-# LLM EXPLORATION
+# STEP 2: LLM EXPLORATION
 # ===============================
 st.header("2. Run Theory Exploration")
 
@@ -147,14 +159,10 @@ with col1:
                 text_data
             )
         else:
-            st.error("Please paste textual data first.")
+            st.error("Please upload a valid CSV file first.")
 
     if "output_1" in st.session_state:
-        st.text_area(
-            "LLM 1 Output",
-            st.session_state["output_1"],
-            height=350
-        )
+        st.text_area("LLM 1 Output", st.session_state["output_1"], height=350)
 
 # -------- LLM 2 --------
 with col2:
@@ -177,17 +185,13 @@ with col2:
 
             st.session_state["output_2"] = result
         else:
-            st.error("Please paste textual data first.")
+            st.error("Please upload a valid CSV file first.")
 
     if "output_2" in st.session_state:
-        st.text_area(
-            "LLM 2 Output",
-            st.session_state["output_2"],
-            height=350
-        )
+        st.text_area("LLM 2 Output", st.session_state["output_2"], height=350)
 
 # ===============================
-# JUDGE MODEL
+# STEP 3: JUDGE MODEL
 # ===============================
 st.header("3. Judge Model Synthesis")
 
@@ -208,12 +212,11 @@ OUTPUT 2:
     else:
         st.error("Please run both LLM explorations first.")
 
-# -------- Display Judge Output --------
 if "judge_output" in st.session_state:
     st.markdown(st.session_state["judge_output"])
 
 # ===============================
-# PARSE JUDGE TABLE → CSV
+# STEP 4: EXPORT TABLE
 # ===============================
 st.header("4. Export Judge Results as CSV")
 
@@ -232,14 +235,14 @@ if "judge_output" in st.session_state:
             for row in table_lines[1:]
         ]
 
-        df = pd.DataFrame(rows, columns=headers)
+        df_constructs = pd.DataFrame(rows, columns=headers)
 
         st.subheader("Parsed Constructs Table")
-        st.dataframe(df)
+        st.dataframe(df_constructs)
 
         st.download_button(
             label="Download Constructs as CSV",
-            data=df.to_csv(index=False),
+            data=df_constructs.to_csv(index=False),
             file_name="theory_exploration_constructs.csv",
             mime="text/csv"
         )
@@ -247,33 +250,7 @@ if "judge_output" in st.session_state:
         st.info("No table detected in judge output.")
 
 # ===============================
-# EXPORT ALL RESULTS
-# ===============================
-st.header("5. Download Full Results (Archive)")
-
-export_content = ""
-
-if "output_1" in st.session_state:
-    export_content += "\n\n=== LLM 1 OUTPUT ===\n\n" + st.session_state["output_1"]
-
-if "output_2" in st.session_state:
-    export_content += "\n\n=== LLM 2 OUTPUT ===\n\n" + st.session_state["output_2"]
-
-if "judge_output" in st.session_state:
-    export_content += "\n\n=== JUDGE OUTPUT ===\n\n" + st.session_state["judge_output"]
-
-if export_content:
-    st.download_button(
-        label="Download Full Results (TXT)",
-        data=export_content,
-        file_name="theory_exploration_results.txt",
-        mime="text/plain"
-    )
-
-# ===============================
 # FOOTER
 # ===============================
 st.markdown("---")
-st.caption(
-    "This app supports persistent multi-model theory-guided construct exploration across diverse textual datasets."
-)
+st.caption("This app supports multi-model theory-guided construct exploration using uploaded CSV datasets.")
