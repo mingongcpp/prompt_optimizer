@@ -249,6 +249,43 @@ if "judge_output" in st.session_state:
     else:
         st.info("No table detected in judge output.")
 
+
+# ===============================
+# STEP 5: DOWNLOAD FULL RESULTS
+# ===============================
+st.header("5. Download Full Results (Archive)")
+
+export_content = ""
+
+if "output_1" in st.session_state:
+    export_content += "\n\n==============================\n"
+    export_content += "LLM 1 OUTPUT (GPT-5.2-chat)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["output_1"]
+
+if "output_2" in st.session_state:
+    export_content += "\n\n==============================\n"
+    export_content += "LLM 2 OUTPUT (Gemini 3 Flash)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["output_2"]
+
+if "judge_output" in st.session_state:
+    export_content += "\n\n==============================\n"
+    export_content += "JUDGE MODEL OUTPUT (Claude Opus)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["judge_output"]
+
+if export_content:
+    st.download_button(
+        label="Download Full Results (TXT)",
+        data=export_content,
+        file_name="theory_exploration_full_results.txt",
+        mime="text/plain"
+    )
+else:
+    st.info("Run the models first to generate downloadable results.")
+
+
 # ===============================
 # FOOTER
 # ===============================
