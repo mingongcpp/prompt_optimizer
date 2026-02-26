@@ -28,13 +28,13 @@ if not OPENROUTER_API_KEY:
 # ================= INPUTS =================
 st.header("1. Definition-only Prompt")
 definition_prompt = st.text_area(
-    "Paste the definition-only prompt here:",
+    "Enter the definition-only prompt here:",
     height=150
 )
 
 st.header("2. Model Disagreement Themes")
 disagreement_themes = st.text_area(
-    "Paste the disagreement themes and representative statements here:",
+    "Enter the disagreement themes and representative statements here:",
     height=320
 )
 
