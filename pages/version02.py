@@ -28,17 +28,17 @@ if not OPENROUTER_API_KEY:
 # ================= INPUTS =================
 st.header("1. Definition-only Prompt")
 definition_prompt = st.text_area(
-    "Paste the definition-only prompt here:",
+    "Enter the definition-only prompt here:",
     height=150
 )
 
 st.header("2. Model Disagreement Themes")
 disagreement_themes = st.text_area(
-    "Paste the disagreement themes and representative statements here:",
+    "Enter the disagreement themes and representative statements here:",
     height=320
 )
 
-# ================= SYSTEM PROMPT (FINAL, STRICT) =================
+# ================= SYSTEM PROMPT (STRICT) =================
 SYSTEM_PROMPT = """
 You are a research assistant helping to optimize a classification prompt
 to maximize intercoder reliability.
@@ -64,10 +64,22 @@ DESIGN GOAL:
 The goal is NOT completeness, but the most straightforward decision rules
 that disambiguate edge cases and improve agreement among coders.
 
+ADDITIONAL CONSTRAINTS (MUST FOLLOW):
+- Do NOT improve agreement by over-restricting the definition so that almost everything becomes 0.
+- The revised prompt MUST preserve common, text-observable signals discussed in the disagreement themes.
+- If hashtags, branded challenges, event participation language, or in-group markers are common evidence,
+  the revised prompt must define clear conditions for when they count vs. when they do not,
+  rather than excluding them entirely.
+- Avoid blanket exclusions like "hashtags never count" if the disagreement themes indicate they are meaningful.
+- Include at least one Inclusion Criterion covering common "implicit but frequent" cues, with guardrails
+  to prevent false positives (e.g., require a brand-specific community hashtag, or require participation language).
+- If the rules would label nearly everything as 0, revise the rules to better reflect how the tactic appears
+  in this dataset, unless the disagreement themes clearly show the tactic is truly rare.
+
 You MUST output ONLY valid XML that strictly follows the requested structure.
 """
 
-# ================= OPENROUTER CALL =================
+# ================= OPENROUTER CALL (GPT / CLAUDE) =================
 def call_openrouter(model_name, system_prompt, user_prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -90,6 +102,35 @@ def call_openrouter(model_name, system_prompt, user_prompt):
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
+# ================= OPENROUTER CALL (GEMINI SPECIAL) =================
+def call_openrouter_gemini(model_name, system_prompt, user_prompt):
+    """
+    Gemini models on OpenRouter do not reliably support the `system` role.
+    We therefore merge system + user into a single user message.
+    """
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://streamlit.io",
+        "X-Title": "Prompt-Based Classification Optimizer"
+    }
+
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": system_prompt + "\n\n" + user_prompt
+            }
+        ],
+        "temperature": 0
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=120)
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
 # ================= OPTIMIZATION =================
 st.header("3. Generate Structured Classification Prompts")
 
@@ -99,7 +140,7 @@ if st.button("Generate Structured Prompts"):
     elif not OPENROUTER_API_KEY:
         st.error("Missing OpenRouter API key.")
     else:
-        with st.spinner("Generating structured prompts with two models..."):
+        with st.spinner("Generating structured prompts with three models..."):
 
             user_prompt = f"""
 DEFINITION-ONLY PROMPT:
@@ -107,6 +148,12 @@ DEFINITION-ONLY PROMPT:
 
 MODEL DISAGREEMENT THEMES AND EXAMPLES:
 {disagreement_themes}
+
+IMPORTANT:
+- Do NOT solve disagreement by excluding common cues entirely.
+- If the disagreement themes show that common evidence includes hashtags, branded challenges, event participation language,
+  or in-group markers, the revised prompt MUST define clear conditions for when those cues count vs. when they do not.
+- Avoid blanket rules like "hashtags never count" if they are meaningful in this dataset.
 
 Please generate a FINAL, ADJUDICATIVE classification prompt using EXACTLY
 the XML structure below. This prompt will be used directly by human
@@ -120,17 +167,18 @@ precision and readability are required.
 </Role>
 
 <Definition>
-[Provide a concise, adjudicative definition. Emphasize NEW vs. standard behavior and THIS STATEMENT ONLY.]
+[Provide a concise, adjudicative definition. Emphasize THIS STATEMENT ONLY and define clear boundaries.]
 </Definition>
 
 <Input>
 You will be provided with:
-- <context>: The surrounding conversation including the customer’s concern(s), ending with the salesperson’s statement to classify.
-- <statement>: The salesperson’s specific response to classify. ONLY this statement should be evaluated.
+- <context>: The surrounding text or optional contextual information related to the statement.
+- <statement>: The specific text segment to classify. ONLY this statement should be evaluated.
 </Input>
 
 <Task>
-[State the binary decision clearly. Emphasize that only explicit actions in the specific <statement> count.]
+[State the binary decision clearly. Emphasize that only explicit evidence in the specific <statement> counts,
+but include clear rules for common implicit cues when the disagreement themes indicate they are valid.]
 </Task>
 
 <Classification>
@@ -199,7 +247,7 @@ Return your answer as JSON only, using exactly this schema:
 </classification_prompt>
 """
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
 
             # ===== GPT-5.2 =====
             with col1:
@@ -234,3 +282,20 @@ Return your answer as JSON only, using exactly this schema:
                     )
                 except Exception as e:
                     st.error(f"Claude error: {e}")
+
+            # ===== GEMINI 3 FLASH (PREVIEW) =====
+            with col3:
+                st.subheader("Gemini 3 Flash (Preview) Revised Prompt")
+                try:
+                    gemini_prompt = call_openrouter_gemini(
+                        model_name="google/gemini-3-flash-preview",
+                        system_prompt=SYSTEM_PROMPT,
+                        user_prompt=user_prompt
+                    )
+                    st.text_area(
+                        "Structured Classification Prompt (Gemini 3 Flash):",
+                        gemini_prompt,
+                        height=600
+                    )
+                except Exception as e:
+                    st.error(f"Gemini error: {e}")
