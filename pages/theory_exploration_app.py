@@ -62,7 +62,7 @@ if uploaded_file is not None:
         st.error(f"Error reading file: {e}")
 
 # ===============================
-# PROMPTS
+# PROMPTS (UPDATED: single-construct rule)
 # ===============================
 THEORY_EXPLORATION_PROMPT = """
 You are a research assistant conducting theory-guided construct exploration
@@ -78,29 +78,30 @@ Your goal is to identify theory-grounded messaging strategies (constructs) that 
 Tasks:
 1. Identify relevant, established theories (e.g., persuasion/influence, branding, consumer psychology, strategic communication).
 2. Conduct grounded analysis of the captions and detect recurring messaging strategies.
-3. Propose 4–8 candidate constructs, then select the best 6 constructs based on observability + measurability + expected prevalence.
+3. Propose 6 final constructs based on observability + measurability + expected prevalence.
 
 CRITICAL REQUIREMENTS:
 - Focus ONLY on signals observable in caption text. Do NOT rely on images/video content.
 - Prefer high-frequency, clearly measurable strategies. Avoid rare, vague, or highly interpretive constructs.
-- Do NOT treat surface formatting alone (emojis/hashtags alone) as a construct, unless it clearly functions as a strategy cue with meaning.
 - Each construct must be definable as a simple yes/no decision.
 
-OUTPUT FORMAT (use these section headers):
+SINGLE-CONSTRUCT RULE (VERY IMPORTANT):
+- Each construct must be ONE atomic concept only.
+- Do NOT use names like "X & Y", "X and Y", "X/Y", "X + Y", or "X, Y".
+- If you think two ideas belong together, SPLIT them into two separate constructs.
 
-## Candidate Constructs (Shortlist)
-List 4–8 candidates with 1–2 lines each.
+OUTPUT FORMAT (use these section headers):
 
 ## Final Constructs (Ranked by Expected Prevalence)
 Provide a table ranked from most frequent to least frequent with columns:
 - Rank
-- Construct Name
+- Construct Name (single concept only)
 - Theory Anchor
 - Expected Prevalence (High / Medium / Low)
 - Textual Cues for Coding (3–6 short cues/phrases/patterns)
 - Caption Examples (2–3 short excerpts from the dataset)
 
-## Notes for Measurement
+## Measurement Notes
 Briefly explain any common edge cases that could cause coder disagreement for these constructs.
 """
 
@@ -113,13 +114,18 @@ Prioritize constructs that are:
 (2) suitable for binary coding,
 (3) likely to be frequent enough to measure.
 
+SINGLE-CONSTRUCT RULE (VERY IMPORTANT):
+- Each construct must be ONE atomic concept only.
+- Do NOT output combined constructs such as "X & Y", "X and Y", "X/Y", or "X + Y".
+- If necessary, split combined constructs into separate constructs.
+
 Please produce a clear synthesis using the following format ONLY.
 
 ## Final Theory-Grounded Constructs (Ranked by Expected Prevalence)
 
 Present a table with the following columns:
 - Rank
-- Construct Name
+- Construct Name (single concept only)
 - Observable Behavior (from caption text)
 - Theory
 - Expected Prevalence (High/Medium/Low)
@@ -130,7 +136,7 @@ Present a table with the following columns:
 List 3–6 bullet points describing likely edge cases or ambiguity risks.
 
 ## Key Hypotheses
-List 2–3 concise, testable hypotheses (H1, H2, H3 if applicable) linking constructs to measurable outcomes (e.g., engagement-related metrics).
+List 2–3 concise, testable hypotheses linking constructs to measurable outcomes (e.g., engagement-related metrics).
 
 Do NOT output XML or JSON.
 Do NOT include explanations outside the sections above.
