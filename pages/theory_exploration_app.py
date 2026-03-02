@@ -62,7 +62,7 @@ if uploaded_file is not None:
         st.error(f"Error reading file: {e}")
 
 # ===============================
-# PROMPTS (UPDATED: single-construct rule)
+# PROMPTS (UPDATED: remove Measurement Notes section)
 # ===============================
 THEORY_EXPLORATION_PROMPT = """
 You are a research assistant conducting theory-guided construct exploration
@@ -100,9 +100,6 @@ Provide a table ranked from most frequent to least frequent with columns:
 - Expected Prevalence (High / Medium / Low)
 - Textual Cues for Coding (3–6 short cues/phrases/patterns)
 - Caption Examples (2–3 short excerpts from the dataset)
-
-## Measurement Notes
-Briefly explain any common edge cases that could cause coder disagreement for these constructs.
 """
 
 JUDGE_PROMPT = """
@@ -131,9 +128,6 @@ Present a table with the following columns:
 - Expected Prevalence (High/Medium/Low)
 - Textual Cues for Coding (3–6 cues)
 - Typical Outcome
-
-## Measurement Notes
-List 3–6 bullet points describing likely edge cases or ambiguity risks.
 
 ## Key Hypotheses
 List 2–3 concise, testable hypotheses linking constructs to measurable outcomes (e.g., engagement-related metrics).
