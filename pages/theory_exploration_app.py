@@ -14,9 +14,10 @@ st.set_page_config(
 st.title("Theory-Guided Construct Exploration")
 st.write(
     """
-    This app operationalizes a **theory exploration workflow** for conversational sales data.
-    It uses multiple LLMs to independently explore theory and a judge model to synthesize
-    theory-grounded constructs and hypotheses in a reproducible pipeline.
+    This app operationalizes a **theory-guided construct exploration workflow**
+    for textual data in marketing, persuasion, and strategic communication contexts.
+
+    Upload a CSV file containing textual data (must include columns: `id`, `caption`).
     """
 )
 
@@ -26,68 +27,116 @@ st.write(
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 if not OPENROUTER_API_KEY:
-    st.warning("Please set OPENROUTER_API_KEY in Streamlit Secrets.")
+    st.warning("Please set OPENROUTER_API_KEY in environment variables.")
 
 # ===============================
-# INPUT TRANSCRIPTS
+# STEP 1: UPLOAD CSV
 # ===============================
-st.header("1. Enter Sample Chat Transcripts")
+st.header("1. Upload Text Dataset (CSV)")
 
-chat_data = st.text_area(
-    "Paste sample chat transcripts here (10–15 conversations recommended):",
-    height=300,
-    placeholder="Customer: I'm not sure about the price.\nAgent: Let me check with my supervisor..."
+uploaded_file = st.file_uploader(
+    "Upload CSV file (must contain columns: id, caption)",
+    type=["csv"]
 )
+
+text_data = None
+df = None
+
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+
+        if "id" not in df.columns or "caption" not in df.columns:
+            st.error("CSV must contain 'id' and 'caption' columns.")
+        else:
+            st.success("File uploaded successfully.")
+            st.subheader("Preview Data")
+            st.dataframe(df.head())
+
+            # Combine captions into one text block for exploration
+            text_data = "\n\n".join(
+                [f"ID {row['id']}: {row['caption']}" for _, row in df.iterrows()]
+            )
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
 
 # ===============================
 # PROMPTS
 # ===============================
 THEORY_EXPLORATION_PROMPT = """
 You are a research assistant conducting theory-guided construct exploration
-in marketing and sales.
+for marketing, persuasion, and strategic communication in social media captions.
 
-Below are sample chat transcripts from a conversational sales context.
+Below is a dataset of Instagram post captions.
+
+Your goal is to identify theory-grounded messaging strategies (constructs) that are:
+(1) explicitly observable in caption TEXT (ignore visuals),
+(2) suitable for binary coding (present = 1, absent = 0),
+(3) likely to appear frequently enough to measure in this dataset.
 
 Tasks:
-1. Identify relevant domain-specific marketing and sales theories.
-2. Conduct grounded analysis on the transcripts.
-3. Identify recurring agent behaviors.
-4. Map behaviors to theory-grounded constructs.
+1. Identify relevant, established theories (e.g., persuasion/influence, branding, consumer psychology, strategic communication).
+2. Conduct grounded analysis of the captions and detect recurring messaging strategies.
+3. Propose 4–8 candidate constructs, then select the best 6 constructs based on observability + measurability + expected prevalence.
 
-Requirements:
-- Focus on domain-specific theories.
-- Do NOT treat surface linguistic features as constructs.
-- Identify 3–6 constructs.
-- Explain how each construct appears in the transcripts.
+CRITICAL REQUIREMENTS:
+- Focus ONLY on signals observable in caption text. Do NOT rely on images/video content.
+- Prefer high-frequency, clearly measurable strategies. Avoid rare, vague, or highly interpretive constructs.
+- Do NOT treat surface formatting alone (emojis/hashtags alone) as a construct, unless it clearly functions as a strategy cue with meaning.
+- Each construct must be definable as a simple yes/no decision.
 
-Output clearly with section headers.
+OUTPUT FORMAT (use these section headers):
+
+## Candidate Constructs (Shortlist)
+List 4–8 candidates with 1–2 lines each.
+
+## Final Constructs (Ranked by Expected Prevalence)
+Provide a table ranked from most frequent to least frequent with columns:
+- Rank
+- Construct Name
+- Theory Anchor
+- Expected Prevalence (High / Medium / Low)
+- Textual Cues for Coding (3–6 short cues/phrases/patterns)
+- Caption Examples (2–3 short excerpts from the dataset)
+
+## Notes for Measurement
+Briefly explain any common edge cases that could cause coder disagreement for these constructs.
 """
 
 JUDGE_PROMPT = """
 You are a senior academic reviewer.
 
 Your task is to compare and synthesize two independent theory exploration outputs.
+Prioritize constructs that are:
+(1) observable in caption text,
+(2) suitable for binary coding,
+(3) likely to be frequent enough to measure.
 
-Please produce a clear, human-readable synthesis using the following format ONLY.
+Please produce a clear synthesis using the following format ONLY.
 
-## Final Theory-Grounded Constructs
+## Final Theory-Grounded Constructs (Ranked by Expected Prevalence)
 
 Present a table with the following columns:
+- Rank
 - Construct Name
-- Observable Behavior (example or description from transcripts)
+- Observable Behavior (from caption text)
 - Theory
+- Expected Prevalence (High/Medium/Low)
+- Textual Cues for Coding (3–6 cues)
 - Typical Outcome
 
-## Key Hypotheses
+## Measurement Notes
+List 3–6 bullet points describing likely edge cases or ambiguity risks.
 
-List 2–3 concise, testable hypotheses (H1, H2, H3 if applicable) that explain how the constructs influence conversational outcomes.
+## Key Hypotheses
+List 2–3 concise, testable hypotheses (H1, H2, H3 if applicable) linking constructs to measurable outcomes (e.g., engagement-related metrics).
 
 Do NOT output XML or JSON.
 Do NOT include explanations outside the sections above.
 """
-
 # ===============================
-# OPENROUTER CALL (SAFE)
+# OPENROUTER CALL
 # ===============================
 def call_openrouter(model_name, system_prompt, content):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -102,10 +151,7 @@ def call_openrouter(model_name, system_prompt, content):
         "model": model_name,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Here are the chat transcripts:\n\n{content}"
-            }
+            {"role": "user", "content": f"Here is the textual dataset:\n\n{content}"}
         ],
         "temperature": 0
     }
@@ -113,12 +159,7 @@ def call_openrouter(model_name, system_prompt, content):
     response = requests.post(url, headers=headers, json=payload, timeout=120)
 
     if response.status_code != 200:
-        return (
-            f"[ERROR]\n"
-            f"Model: {model_name}\n"
-            f"Status code: {response.status_code}\n"
-            f"Response: {response.text}"
-        )
+        return f"[ERROR] {response.text}"
 
     try:
         return response.json()["choices"][0]["message"]["content"]
@@ -126,7 +167,7 @@ def call_openrouter(model_name, system_prompt, content):
         return f"[ERROR] Failed to parse response: {e}"
 
 # ===============================
-# LLM EXPLORATION
+# STEP 2: LLM EXPLORATION
 # ===============================
 st.header("2. Run Theory Exploration")
 
@@ -136,31 +177,27 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("LLM 1 (GPT-5.2-chat)")
     if st.button("Run LLM 1"):
-        if chat_data:
+        if text_data:
             st.session_state["output_1"] = call_openrouter(
                 "openai/gpt-5.2-chat",
                 THEORY_EXPLORATION_PROMPT,
-                chat_data
+                text_data
             )
         else:
-            st.error("Please paste chat transcripts first.")
+            st.error("Please upload a valid CSV file first.")
 
     if "output_1" in st.session_state:
-        st.text_area(
-            "LLM 1 Output",
-            st.session_state["output_1"],
-            height=350
-        )
+        st.text_area("LLM 1 Output", st.session_state["output_1"], height=350)
 
 # -------- LLM 2 --------
 with col2:
     st.subheader("LLM 2 (Gemini 3 Flash)")
     if st.button("Run LLM 2"):
-        if chat_data:
+        if text_data:
             result = call_openrouter(
                 "google/gemini-3-flash-preview",
                 THEORY_EXPLORATION_PROMPT,
-                chat_data
+                text_data
             )
 
             if result.startswith("[ERROR]"):
@@ -168,22 +205,18 @@ with col2:
                 result = call_openrouter(
                     "openai/gpt-5.2-chat",
                     THEORY_EXPLORATION_PROMPT,
-                    chat_data
+                    text_data
                 )
 
             st.session_state["output_2"] = result
         else:
-            st.error("Please paste chat transcripts first.")
+            st.error("Please upload a valid CSV file first.")
 
     if "output_2" in st.session_state:
-        st.text_area(
-            "LLM 2 Output",
-            st.session_state["output_2"],
-            height=350
-        )
+        st.text_area("LLM 2 Output", st.session_state["output_2"], height=350)
 
 # ===============================
-# JUDGE MODEL
+# STEP 3: JUDGE MODEL
 # ===============================
 st.header("3. Judge Model Synthesis")
 
@@ -204,12 +237,11 @@ OUTPUT 2:
     else:
         st.error("Please run both LLM explorations first.")
 
-# -------- Display Judge Output --------
 if "judge_output" in st.session_state:
     st.markdown(st.session_state["judge_output"])
 
 # ===============================
-# PARSE JUDGE TABLE → CSV
+# STEP 4: EXPORT TABLE
 # ===============================
 st.header("4. Export Judge Results as CSV")
 
@@ -228,48 +260,61 @@ if "judge_output" in st.session_state:
             for row in table_lines[1:]
         ]
 
-        df = pd.DataFrame(rows, columns=headers)
+        df_constructs = pd.DataFrame(rows, columns=headers)
 
         st.subheader("Parsed Constructs Table")
-        st.dataframe(df)
+        st.dataframe(df_constructs)
 
         st.download_button(
             label="Download Constructs as CSV",
-            data=df.to_csv(index=False),
+            data=df_constructs.to_csv(index=False),
             file_name="theory_exploration_constructs.csv",
             mime="text/csv"
         )
     else:
         st.info("No table detected in judge output.")
 
+
 # ===============================
-# EXPORT ALL RESULTS (ARCHIVE)
+# STEP 5: DOWNLOAD FULL RESULTS
 # ===============================
 st.header("5. Download Full Results (Archive)")
 
 export_content = ""
 
 if "output_1" in st.session_state:
-    export_content += "\n\n=== LLM 1 OUTPUT ===\n\n" + st.session_state["output_1"]
+    export_content += "\n\n==============================\n"
+    export_content += "LLM 1 OUTPUT (GPT-5.2-chat)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["output_1"]
 
 if "output_2" in st.session_state:
-    export_content += "\n\n=== LLM 2 OUTPUT ===\n\n" + st.session_state["output_2"]
+    export_content += "\n\n==============================\n"
+    export_content += "LLM 2 OUTPUT (Gemini 3 Flash)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["output_2"]
 
 if "judge_output" in st.session_state:
-    export_content += "\n\n=== JUDGE OUTPUT ===\n\n" + st.session_state["judge_output"]
+    export_content += "\n\n==============================\n"
+    export_content += "JUDGE MODEL OUTPUT (Claude Opus)\n"
+    export_content += "==============================\n\n"
+    export_content += st.session_state["judge_output"]
 
 if export_content:
     st.download_button(
         label="Download Full Results (TXT)",
         data=export_content,
-        file_name="theory_exploration_results.txt",
+        file_name="theory_exploration_full_results.txt",
         mime="text/plain"
     )
+else:
+    st.info("Run the models first to generate downloadable results.")
+
 
 # ===============================
 # FOOTER
 # ===============================
 st.markdown("---")
-st.caption(
-    "This app supports persistent multi-model theory exploration with CSV-exportable synthesis."
-)
+st.caption("This app supports multi-model theory-guided construct exploration using uploaded CSV datasets.")
+
+
