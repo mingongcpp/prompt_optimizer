@@ -65,41 +65,50 @@ if uploaded_file is not None:
 # PROMPTS (UPDATED: remove Measurement Notes section)
 # ===============================
 THEORY_EXPLORATION_PROMPT = """
-You are a research assistant conducting theory-guided construct exploration
-for marketing, persuasion, and strategic communication in social media captions.
+You are a research assistant conducting THEORY-FIRST construct exploration
+in marketing, persuasion, and consumer behavior.
 
-Below is a dataset of Instagram post captions.
+Below is a dataset of Instagram captions.
 
-Your goal is to identify theory-grounded messaging strategies (constructs) that are:
-(1) explicitly observable in caption TEXT (ignore visuals),
-(2) suitable for binary coding (present = 1, absent = 0),
-(3) likely to appear frequently enough to measure in this dataset.
+Goal:
+Start from well-established theories/models, then derive a small set of
+theory-grounded constructs that are observable in caption text and can be
+measured with binary coding (present = 1, absent = 0).
 
 Tasks:
-1. Identify relevant, established theories (e.g., persuasion/influence, branding, consumer psychology, strategic communication).
-2. Conduct grounded analysis of the captions and detect recurring messaging strategies.
-3. Propose 6 final constructs based on observability + measurability + expected prevalence.
+1) Identify 3–6 relevant, established theories/models that plausibly explain
+   how caption messaging influences audience response (e.g., social proof,
+   source credibility, framing, identity, community, scarcity/CTA).
+2) Using ONLY the caption text (ignore visuals), identify recurring messaging
+   behaviors that map to these theories.
+3) Propose 6 FINAL constructs that are:
+   - clearly tied to a specific theory/model,
+   - explicitly observable in caption text,
+   - suitable for binary coding,
+   - likely to have enough positive cases for analysis (avoid extremely rare constructs).
 
-CRITICAL REQUIREMENTS:
-- Focus ONLY on signals observable in caption text. Do NOT rely on images/video content.
-- Prefer high-frequency, clearly measurable strategies. Avoid rare, vague, or highly interpretive constructs.
-- Each construct must be definable as a simple yes/no decision.
-
-SINGLE-CONSTRUCT RULE (VERY IMPORTANT):
+Naming rule (IMPORTANT):
 - Each construct must be ONE atomic concept only.
-- Do NOT use names like "X & Y", "X and Y", "X/Y", "X + Y", or "X, Y".
-- If you think two ideas belong together, SPLIT them into two separate constructs.
+- Do NOT use combined names like "X & Y", "X and Y", "X/Y", "X + Y".
+- If two ideas appear together, split them into separate constructs.
 
-OUTPUT FORMAT (use these section headers):
+Output format:
 
-## Final Constructs (Ranked by Expected Prevalence)
+## Theories/Models Used
+List 3–6 theories/models with 1–2 lines on why they fit this dataset.
+
+## Final Theory-Grounded Constructs (Ranked by Expected Prevalence)
 Provide a table ranked from most frequent to least frequent with columns:
 - Rank
 - Construct Name (single concept only)
-- Theory Anchor
+- Theory Anchor (name a specific theory/model)
 - Expected Prevalence (High / Medium / Low)
-- Textual Cues for Coding (3–6 short cues/phrases/patterns)
+- Textual Cues for Coding (3–6 short cues)
 - Caption Examples (2–3 short excerpts from the dataset)
+
+## Key Hypotheses
+List 2–3 testable hypotheses linking these constructs to post outcomes
+(e.g., engagement-related metrics).
 """
 
 JUDGE_PROMPT = """
