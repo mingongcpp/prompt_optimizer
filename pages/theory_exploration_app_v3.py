@@ -62,7 +62,7 @@ if uploaded_file is not None:
         st.error(f"Error reading file: {e}")
 
 # ===============================
-# PROMPTS (UPDATED FOR THEORY-GROUNDED SALES TACTICS)
+# PROMPTS
 # ===============================
 THEORY_EXPLORATION_PROMPT = """
 You are a research assistant conducting THEORY-FIRST construct exploration
@@ -73,8 +73,7 @@ Below is a dataset of Instagram captions.
 Goal:
 Start from well-established theories/models in marketing, persuasion, and sales,
 then derive a small set of theory-grounded sales or persuasive tactics that are
-observable in caption text and can be measured with binary coding
-(present = 1, absent = 0).
+observable in caption text.
 
 Important conceptual boundary:
 - Focus on tactics that reflect persuasive or selling moves enacted in language.
@@ -91,24 +90,27 @@ Tasks:
 3) Propose 6 FINAL constructs that are:
    - clearly tied to a specific theory/model,
    - explicitly observable in caption text,
-   - suitable for binary coding,
+   - suitable for clear present/absent coding at the caption level,
    - likely to have enough positive cases for analysis (avoid extremely rare constructs),
    - actionable for brand communication.
 
 Naming rule (IMPORTANT):
 - Each construct must be ONE atomic concept only.
 - Do NOT use combined names like "X & Y", "X and Y", "X/Y", "X + Y".
-- If two ideas appear together, split them into separate constructs.
+- Use short, plain, human-readable names that a marketing student or manager can understand immediately.
+- Prefer widely understood terms over invented or overly abstract labels.
+- The construct name should describe the observable tactic directly, not the prompt or the coding process.
 
 Output format:
 
 ## Theories/Models Used
-List 3–6 theories/models with 1–2 lines on why they fit this dataset.
+List 5 theories/models with 1–2 lines on why they fit this dataset.
 
 ## Final Theory-Grounded Constructs (Ranked by Expected Prevalence)
 Provide a table ranked from most frequent to least frequent with columns:
 - Rank
 - Construct Name (single concept only)
+- Operational Definition
 - Theory Anchor (name a specific theory/model)
 - Expected Prevalence (High / Medium / Low)
 - Textual Cues for Coding (3–6 short cues)
@@ -125,7 +127,7 @@ You are a senior academic reviewer.
 Your task is to compare and synthesize two independent theory exploration outputs.
 Prioritize constructs that are:
 (1) observable in caption text,
-(2) suitable for binary coding,
+(2) suitable for clear present/absent coding at the caption level,
 (3) likely to be frequent enough to measure,
 (4) clearly framed as theory-grounded sales or persuasive tactics,
 not broad topics or overall stylistic qualities.
@@ -139,6 +141,11 @@ SINGLE-CONSTRUCT RULE (VERY IMPORTANT):
 - Do NOT output combined constructs such as "X & Y", "X and Y", "X/Y", or "X + Y".
 - If necessary, split combined constructs into separate constructs.
 
+Naming rule:
+- Use short, plain, human-readable construct names.
+- Prefer widely understood marketing or persuasion terms over invented labels.
+- The construct name should describe the tactic directly and clearly.
+
 Please produce a clear synthesis using the following format ONLY.
 
 ## Final Theory-Grounded Constructs (Ranked by Expected Prevalence)
@@ -146,7 +153,7 @@ Please produce a clear synthesis using the following format ONLY.
 Present a table with the following columns:
 - Rank
 - Construct Name (single concept only)
-- Observable Behavior (from caption text)
+- Operational Definition
 - Theory
 - Expected Prevalence (High/Medium/Low)
 - Textual Cues for Coding (3–6 cues)
@@ -298,7 +305,6 @@ if "judge_output" in st.session_state:
     else:
         st.info("No table detected in judge output.")
 
-
 # ===============================
 # STEP 5: DOWNLOAD FULL RESULTS
 # ===============================
@@ -333,7 +339,6 @@ if export_content:
     )
 else:
     st.info("Run the models first to generate downloadable results.")
-
 
 # ===============================
 # FOOTER
